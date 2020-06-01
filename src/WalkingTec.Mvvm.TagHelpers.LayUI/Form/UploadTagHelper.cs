@@ -1,6 +1,7 @@
 using System;
 using Microsoft.AspNetCore.Razor.TagHelpers;
 using WalkingTec.Mvvm.Core;
+using WalkingTec.Mvvm.Core.Extensions;
 
 namespace WalkingTec.Mvvm.TagHelpers.LayUI
 {
@@ -53,6 +54,8 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI
 
         public string ConnectionString { get; set; }
 
+        public string ButtonText { get; set; }
+
         public override void Process(TagHelperContext context, TagHelperOutput output)
         {
             output.TagName = "button";
@@ -61,7 +64,14 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI
             output.Attributes.Add("class", "layui-btn layui-btn-sm");
             output.Attributes.Add("type", "button");
             output.TagMode = TagMode.StartTagAndEndTag;
-            output.Content.SetHtmlContent(Program._localizer["Select"]);
+            if (string.IsNullOrEmpty(ButtonText))
+            {
+                output.Content.SetHtmlContent(Program._localizer["Select"]);
+            }
+            else
+            {
+                output.Content.SetHtmlContent(ButtonText);
+            }
             string ext = "";
             if (string.IsNullOrEmpty(CustomType))
             {
@@ -116,12 +126,12 @@ namespace WalkingTec.Mvvm.TagHelpers.LayUI
             {
                 if (vm != null)
                 {
-                    url += $"&_DONOT_USE_CS={vm.CurrentCS}";
+                    url = url.AppendQuery($"_DONOT_USE_CS={vm.CurrentCS}");
                 }
             }
             else
             {
-                url += $"&_DONOT_USE_CS={ConnectionString}";
+                url = url.AppendQuery($"_DONOT_USE_CS={ConnectionString}");
             }
 
             output.PreElement.SetHtmlContent($@"

@@ -93,7 +93,7 @@ class ConfigStore {
         * ag-theme-balham
         * ag-theme-material
         */
-        agGridTheme: "ag-theme-alpine",
+        agGridTheme: "ag-theme-balham",
         /**
          * 页签 页面
          */
@@ -130,7 +130,8 @@ class ConfigStore {
             return window.localStorage.getItem('__token') || null;
         },
         clear() {
-            window.localStorage.clear();
+            window.localStorage.removeItem("__User");
+            //window.localStorage.clear();
             window.location.pathname = "/"
         }
     };
