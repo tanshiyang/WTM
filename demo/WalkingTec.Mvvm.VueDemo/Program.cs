@@ -5,13 +5,17 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.SpaServices.ReactDevelopmentServer;
 using Microsoft.AspNetCore.SpaServices.Webpack;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Swagger;
 using WalkingTec.Mvvm.Core;
 using WalkingTec.Mvvm.Mvc;
 using WalkingTec.Mvvm.TagHelpers.LayUI;
+using Microsoft.Extensions.Logging;
 
 namespace WalkingTec.Mvvm.VueDemo
 {
+
     public class Program
     {
         public static void Main(string[] args)
@@ -21,7 +25,14 @@ namespace WalkingTec.Mvvm.VueDemo
 
         public static IWebHost BuildWebHost(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
-                .ConfigureServices(x =>
+                         .ConfigureLogging((hostingContext, logging) =>
+                         {
+                             logging.ClearProviders();
+                             logging.AddConsole();
+                             logging.AddDebug();
+                             logging.AddWTMLogger();
+                         })
+               .ConfigureServices(x =>
                 {
                     var pris = new List<IDataPrivilege>
                         {
@@ -31,19 +42,40 @@ namespace WalkingTec.Mvvm.VueDemo
                     x.AddLayui();
                     x.AddSwaggerGen(c =>
                     {
-                        c.SwaggerDoc("v1", new Info { Title = "My API", Version = "v1" });
+                        c.SwaggerDoc("v1", new OpenApiInfo { Title = "My API", Version = "v1" });
+                        var bearer = new OpenApiSecurityScheme()
+                        {
+                            Description = "JWT Bearer",
+                            Name = "Authorization",
+                            In = ParameterLocation.Header,
+                            Type = SecuritySchemeType.ApiKey
+
+                        };
+                        c.AddSecurityDefinition("Bearer", bearer);
+                        var sr = new OpenApiSecurityRequirement();
+                        sr.Add(new OpenApiSecurityScheme
+                        {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        }, new string[] { });
+                        c.AddSecurityRequirement(sr);
                     });
                     x.AddSpaStaticFiles(configuration =>
                     {
-                        configuration.RootPath = "ClientApp/dist";
+                        configuration.RootPath = "ClientApp/build";
                     });
-
                 })
                 .Configure(x =>
                 {
-                    var env = x.ApplicationServices.GetService<IHostingEnvironment>();
-                    x.UseDeveloperExceptionPage();
-                    x.UseSpaStaticFiles();
+                    var env = x.ApplicationServices.GetService<IWebHostEnvironment>();
+                    x.UseSwagger();
+                    x.UseSwaggerUI(c =>
+                    {
+                        c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
+                    });
                     if (env.IsDevelopment())
                     {
                         x.UseWebpackDevMiddleware(new WebpackDevMiddlewareOptions
@@ -54,12 +86,9 @@ namespace WalkingTec.Mvvm.VueDemo
 
                         });
                     }
-                    x.UseSwagger();
-                    x.UseSwaggerUI(c =>
-                    {
-                        c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
-                    });
+                    x.UseSpaStaticFiles();
                     x.UseFrameworkService();
+
                 })
                 .Build();
 

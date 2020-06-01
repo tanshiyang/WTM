@@ -8,6 +8,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Swashbuckle.AspNetCore.Swagger;
+using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi.Models;
 using WalkingTec.Mvvm.Core;
 using WalkingTec.Mvvm.Demo.Models;
 using WalkingTec.Mvvm.Mvc;
@@ -23,7 +25,7 @@ namespace WalkingTec.Mvvm.Demo
             CreateWebHostBuilder(args).Build().Run();
         }
 
-        public static IWebHostBuilder CreateWebHostBuilder(string[] args)
+        public static IHostBuilder CreateWebHostBuilder(string[] args)
         {
             var configurationBuilder = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
@@ -41,38 +43,47 @@ namespace WalkingTec.Mvvm.Demo
                 globalConfig.ApplicationUrl = ASPNETCORE_URLS;
 
             return
-                WebHost.CreateDefaultBuilder(args)
-                        .ConfigureLogging((hostingContext, logging) =>
-                        {
-                            logging.ClearProviders();
-                            logging.AddConsole();
-                            logging.AddDebug();
-                            logging.AddWTMLogger();
-                        })
-                        .ConfigureServices((hostingCtx, x) =>
-                        {
+                Host.CreateDefaultBuilder(args)
+                 .ConfigureLogging((hostingContext, logging) =>
+                 {
+                     logging.ClearProviders();
+                     logging.AddConsole();
+                     logging.AddWTMLogger();
+                 })
+                .ConfigureWebHostDefaults(webBuilder =>
+                 {
+                     webBuilder.ConfigureServices((hostingCtx, x) =>
+                    {
                         var pris = new List<IDataPrivilege>
                         {
-                            new DataPrivilegeInfo<School>("学校", y => y.SchoolName),
-                            new DataPrivilegeInfo<Major>("专业", y => y.MajorName),
-                            new DataPrivilegeInfo<FrameworkMenu>("菜单", y=>y.PageName)
+                            //new DataPrivilegeInfo<School>("学校", y => y.SchoolName),
+                            //new DataPrivilegeInfo<Major>("专业", y => y.MajorName),
+                            //new DataPrivilegeInfo<FrameworkMenu>("菜单", y=>y.PageName)
                         };
                         x.AddFrameworkService(dataPrivilegeSettings: pris, webHostBuilderContext: hostingCtx,CsSector:CSSelector);
                         x.AddLayui();
                         x.AddSwaggerGen(c =>
                         {
-                            c.SwaggerDoc("v1", new Info { Title = "My API", Version = "v1" });
-                            c.AddSecurityDefinition("Bearer", new ApiKeyScheme()
+                            c.SwaggerDoc("v1", new OpenApiInfo { Title = "My API", Version = "v1" });
+                            var bearer = new OpenApiSecurityScheme()
                             {
                                 Description = "JWT Bearer",
                                 Name = "Authorization",
-                                In = "header",
-                                Type = "apiKey"
-                            });
-                            c.AddSecurityRequirement(new Dictionary<string, IEnumerable<string>>
+                                In = ParameterLocation.Header,
+                                Type = SecuritySchemeType.ApiKey
+
+                            };
+                            c.AddSecurityDefinition("Bearer", bearer);
+                            var sr = new OpenApiSecurityRequirement();
+                            sr.Add(new OpenApiSecurityScheme
                             {
-                                { "Bearer", new string[] { } }
-                            });
+                                Reference = new OpenApiReference
+                                {
+                                    Type = ReferenceType.SecurityScheme,
+                                    Id = "Bearer"
+                                }
+                            }, new string[] { });
+                            c.AddSecurityRequirement(sr);
                         });
                     })
                     .Configure(x =>
@@ -89,6 +100,9 @@ namespace WalkingTec.Mvvm.Demo
                         x.UseFrameworkService();
                     })
                     .UseUrls(globalConfig.ApplicationUrl);
+
+                 });
+
         }
 
         public static string CSSelector(ActionExecutingContext context)

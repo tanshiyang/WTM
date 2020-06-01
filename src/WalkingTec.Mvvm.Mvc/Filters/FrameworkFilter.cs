@@ -112,16 +112,16 @@ namespace WalkingTec.Mvvm.Mvc.Filters
                     if (ctrl is BaseApiController apictrl)
                     {
                         //apictrl.TryValidateModel(model);
-                        apictrl.HttpContext.Request.Body.Position = 0;
-                        StreamReader tr = new StreamReader(apictrl.HttpContext.Request.Body);
-                        string body = tr.ReadToEnd();
-                        var obj = JsonConvert.DeserializeObject(body) as JObject;
-                        var fields = GetJsonFields(obj);
-                        foreach (var field in fields)
+                        if (context.HttpContext.Items.ContainsKey("DONOTUSE_REQUESTBODY"))
                         {
-                            model.FC.Add(field, null);
+                            string body = context.HttpContext.Items["DONOTUSE_REQUESTBODY"].ToString();
+                            var obj = JsonConvert.DeserializeObject(body) as JObject;
+                            var fields = GetJsonFields(obj);
+                            foreach (var field in fields)
+                            {
+                                model.FC.Add(field, null);
+                            }
                         }
-
                     }
                     if (model is IBaseCRUDVM<TopBasePoco> crud)
                     {
@@ -333,9 +333,9 @@ namespace WalkingTec.Mvvm.Mvc.Filters
                     log.ActionUrl = context.HttpContext.Request.Path;
                     log.IP = context.HttpContext.GetRemoteIpAddress();
                     log.Remark = context.Exception?.ToString() ?? string.Empty;
-                    if (string.IsNullOrEmpty(log.Remark) == false && log.Remark.Length > 1000)
+                    if (string.IsNullOrEmpty(log.Remark) == false && log.Remark.Length > 2000)
                     {
-                        log.Remark = log.Remark.Substring(0, 1000);
+                        log.Remark = log.Remark.Substring(0, 2000);
                     }
                     var starttime = context.HttpContext.Items["actionstarttime"] as DateTime?;
                     if (starttime != null)

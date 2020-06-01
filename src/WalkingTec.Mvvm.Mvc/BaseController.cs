@@ -211,46 +211,9 @@ namespace WalkingTec.Mvvm.Mvc
                     _loginUserInfo = Cache.Get<LoginUserInfo>(cacheKey);
                     if (_loginUserInfo == null || _loginUserInfo.Id != userId)
                     {
-                        FrameworkUserBase userInfo = null;
-                        if (DC != null)
-                        {
-                            userInfo = DC.Set<FrameworkUserBase>()
-                                                .Include(x => x.UserRoles)
-                                                .Include(x => x.UserGroups)
-                                                .Where(x => x.ID == userId && x.IsValid == true)
-                                                .SingleOrDefault();
-                        }
-                        if (userInfo != null)
-                        {
-                            // 初始化用户信息
-                            var roleIDs = userInfo.UserRoles.Select(x => x.RoleId).ToList();
-                            var groupIDs = userInfo.UserGroups.Select(x => x.GroupId).ToList();
-                            var dataPris = DC.Set<DataPrivilege>()
-                                            .Where(x => x.UserId == userInfo.ID || (x.GroupId != null && groupIDs.Contains(x.GroupId.Value)))
-                                            .ToList();
-
-                            ProcessTreeDp(dataPris);
-                            //查找登录用户的页面权限
-                            var funcPrivileges = DC.Set<FunctionPrivilege>()
-                                .Where(x => x.UserId == userInfo.ID || (x.RoleId != null && roleIDs.Contains(x.RoleId.Value)))
-                                .ToList();
-
-                            _loginUserInfo = new LoginUserInfo
-                            {
-                                Id = userInfo.ID,
-                                ITCode = userInfo.ITCode,
-                                Name = userInfo.Name,
-                                PhotoId = userInfo.PhotoId,
-                                Roles = DC.Set<FrameworkRole>().Where(x => roleIDs.Contains(x.ID)).ToList(),
-                                Groups = DC.Set<FrameworkGroup>().Where(x => groupIDs.Contains(x.ID)).ToList(),
-                                DataPrivileges = dataPris,
-                                FunctionPrivileges = funcPrivileges
-                            };
+                        _loginUserInfo = this.GetLoginUserInfo(userId);
+                        if(_loginUserInfo != null) { 
                             Cache.Add(cacheKey, _loginUserInfo);
-                        }
-                        else
-                        {
-                            return null;
                         }
                     }
                 }
@@ -757,6 +720,58 @@ namespace WalkingTec.Mvvm.Mvc
             });
         }
 
+        protected virtual LoginUserInfo GetLoginUserInfo(Guid userId)
+        {
+            FrameworkUserBase userInfo = null;
+            if (DC != null)
+            {
+                try
+                {
+                    userInfo = DC.Set<FrameworkUserBase>()
+                                        .Include(x => x.UserRoles)
+                                        .Include(x => x.UserGroups)
+                                        .Where(x => x.ID == userId && x.IsValid == true)
+                                        .SingleOrDefault();
+                }
+                catch { }
+            }
+            if (userInfo != null)
+            {
+                // 初始化用户信息
+                var roleIDs = userInfo.UserRoles.Select(x => x.RoleId).ToList();
+                var groupIDs = userInfo.UserGroups.Select(x => x.GroupId).ToList();
+                var dataPris = DC.Set<DataPrivilege>()
+                                .Where(x => x.UserId == userInfo.ID || (x.GroupId != null && groupIDs.Contains(x.GroupId.Value)))
+                                .ToList();
+
+                ProcessTreeDp(dataPris);
+                //查找登录用户的页面权限
+                var funcPrivileges = DC.Set<FunctionPrivilege>()
+                    .Where(x => x.UserId == userInfo.ID || (x.RoleId != null && roleIDs.Contains(x.RoleId.Value)))
+                    .ToList();
+
+                var rv = new LoginUserInfo
+                {
+                    Id = userInfo.ID,
+                    ITCode = userInfo.ITCode,
+                    Name = userInfo.Name,
+                    PhotoId = userInfo.PhotoId,
+                    Roles = DC.Set<FrameworkRole>().Where(x => roleIDs.Contains(x.ID)).ToList(),
+                    Groups = DC.Set<FrameworkGroup>().Where(x => groupIDs.Contains(x.ID)).ToList(),
+                    DataPrivileges = dataPris,
+                    FunctionPrivileges = funcPrivileges
+                };
+                return rv;
+            }
+            else
+            {
+                return null;
+            }
+
+        }
+
+       
+
         [NonAction]
         public FResult FFResult()
         {
@@ -816,19 +831,6 @@ namespace WalkingTec.Mvvm.Mvc
             return Json(data, StatusCodes.Status200OK, SUCCESS);
         }
 
-        /// <summary>
-        /// override Json method
-        /// output format is {data:{object},code:200,msg:""}
-        /// </summary>
-        /// <param name="data">The object to serialize.</param>
-        /// <param name="serializerSettings">settings</param>
-        /// <returns>The created Microsoft.AspNetCore.Mvc.JsonResult that serializes the specified
-        /// data to JSON format for the response.</returns>
-        [NonAction]
-        public override JsonResult Json(object data, JsonSerializerSettings serializerSettings)
-        {
-            return Json(data, StatusCodes.Status200OK, SUCCESS, serializerSettings);
-        }
 
         /// <summary>
         /// override Json method

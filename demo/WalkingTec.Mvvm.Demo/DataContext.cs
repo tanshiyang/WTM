@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using WalkingTec.Mvvm.Core;
@@ -14,6 +15,12 @@ namespace WalkingTec.Mvvm.Demo
         {
         }
 
+        public DataContext(string cs,DBTypeEnum dbtype)
+            : base(cs, dbtype)
+        {
+
+        }
+
         public DbSet<Major> Majors { get; set; }
         public DbSet<School> Schools { get; set; }
         public DbSet<Student> Students { get; set; }
@@ -26,6 +33,13 @@ namespace WalkingTec.Mvvm.Demo
             var state = await base.DataInit(allModules, IsSpa);
 
             return state;
+        }
+    }
+    public class DataContextFactory : IDesignTimeDbContextFactory<DataContext>
+    {
+        public DataContext CreateDbContext(string[] args)
+        {
+            return new DataContext("你的完整连接字符串", DBTypeEnum.SqlServer);
         }
     }
 }

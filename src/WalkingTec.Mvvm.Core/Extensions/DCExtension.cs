@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Transactions;
 
 using Microsoft.EntityFrameworkCore;
@@ -250,11 +253,11 @@ namespace WalkingTec.Mvvm.Core.Extensions
             //根据Text对下拉菜单数据排序
             if (SortByName == true)
             {
-                rv = query.Select(lambda).OrderBy(x => x.Text).ToList();
+                rv = query.AsEnumerable().Select(lambda.Compile()).OrderBy(x => x.Text).ToList();
             }
             else
             {
-                rv = query.Select(lambda).ToList();
+                rv = query.AsEnumerable().Select(lambda.Compile()).ToList();
             }
 
             return rv;
@@ -310,7 +313,7 @@ namespace WalkingTec.Mvvm.Core.Extensions
         /// <param name="dps">数据权限</param>
         /// <param name="IdFields">关联表外键</param>
         /// <returns>修改后的查询语句</returns>
-        public static IQueryable<T> DPWhere<T>(this IQueryable<T> baseQuery, List<DataPrivilege> dps, params Expression<Func<T, object>>[] IdFields)
+        public static IQueryable<T> DPWhere<T>(this IQueryable<T> baseQuery, List<DataPrivilege> dps, params Expression<Func<T, object>>[] IdFields) where T:TopBasePoco
         {
             //循环所有关联外键
             List<string> tableNameList = new List<string>();
@@ -349,7 +352,7 @@ namespace WalkingTec.Mvvm.Core.Extensions
         /// <param name="tableName">关联数据权限的表名,如果关联外键为自身，则参数第一个为自身</param>
         /// <param name="IdFields">关联表外键</param>
         /// <returns>修改后的查询语句</returns>
-        public static IQueryable<T> DPWhere<T>(this IQueryable<T> baseQuery, List<DataPrivilege> dps, List<string> tableName, params Expression<Func<T, object>>[] IdFields)
+        public static IQueryable<T> DPWhere<T>(this IQueryable<T> baseQuery, List<DataPrivilege> dps, List<string> tableName, params Expression<Func<T, object>>[] IdFields) where T:TopBasePoco
         {
             // var dpsSetting = BaseVM.AllDPS;
             ParameterExpression pe = Expression.Parameter(typeof(T));
@@ -748,7 +751,7 @@ where S : struct
 
         public static string GetTableName<T>(this IDataContext self)
         {
-            return self.Model.FindEntityType(typeof(T)).SqlServer().TableName;
+            return self.Model.FindEntityType(typeof(T)).GetTableName();
         }
 
         /// <summary>
@@ -960,6 +963,21 @@ where S : struct
         public void Rollback()
         {
             throw new TransactionInDoubtException("an exception occurs while executing the nested transaction or processing the results");
+        }
+
+        public Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            throw new NotImplementedException();
         }
 
         public Guid TransactionId => Guid.Empty;

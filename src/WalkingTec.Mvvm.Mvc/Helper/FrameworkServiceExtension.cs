@@ -5,6 +5,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.Loader;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -25,7 +26,6 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SpaServices.StaticFiles;
-using Microsoft.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
@@ -35,11 +35,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyModel;
 using Microsoft.Extensions.DependencyModel.Resolution;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
-
 using WalkingTec.Mvvm.Core;
 using WalkingTec.Mvvm.Core.Auth;
 using WalkingTec.Mvvm.Core.Extensions;
@@ -53,6 +53,7 @@ namespace WalkingTec.Mvvm.Mvc
 {
     public static class FrameworkServiceExtension
     {
+        private static List<Assembly> _dynamicAssembly = new List<Assembly>();
         public static IServiceCollection AddFrameworkService(this IServiceCollection services,
             Func<ActionExecutingContext, string> CsSector = null,
             List<IDataPrivilege> dataPrivilegeSettings = null,
@@ -92,10 +93,11 @@ namespace WalkingTec.Mvvm.Mvc
                     .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
             }
             var config = configBuilder.Build();
+            var con = config.Get<Configs>() ?? new Configs();
+
             services.AddLocalization(options => options.ResourcesPath = "Resources");
             var gd = GetGlobalData();
-            var con = config.Get<Configs>() ?? new Configs();
-            //services.Configure<Configs>(config);
+
             if (dataPrivilegeSettings != null)
             {
                 con.DataPrivilegeSettings = dataPrivilegeSettings;
@@ -181,38 +183,34 @@ namespace WalkingTec.Mvvm.Mvc
                 options.ModelBinderProviders.Insert(0, new StringBinderProvider());
 
                 // Filters
-                options.Filters.Add(new AuthorizeFilter());
+                //options.Filters.Add(new AuthorizeFilter());
                 options.Filters.Add(new DataContextFilter(CsSector));
                 options.Filters.Add(new PrivilegeFilter());
                 options.Filters.Add(new FrameworkFilter());
+                options.EnableEndpointRouting = true;
             })
-            .AddJsonOptions(options =>
-            {
-                //忽略循环引用
-                options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
-
-                // custom ContractResolver
-                options.SerializerSettings.ContractResolver = new WTMContractResolver()
-                {
-                    //NamingStrategy = new CamelCaseNamingStrategy()
-                };
-            })
-            .ConfigureApplicationPartManager(m =>
+            .ConfigureApplicationPartManager(appPartsManager =>
             {
                 var feature = new ControllerFeature();
                 if (mvc != null)
                 {
-                    m.ApplicationParts.Add(new AssemblyPart(mvc));
+                    appPartsManager.ApplicationParts.Add(new AssemblyPart(mvc));
                 }
                 if (admin != null)
                 {
-                    m.ApplicationParts.Add(new AssemblyPart(admin));
+                    appPartsManager.ApplicationParts.Add(new AssemblyPart(admin));
                 }
-                m.PopulateFeature(feature);
+                appPartsManager.PopulateFeature(feature);
                 services.AddSingleton(feature.Controllers.Select(t => t.AsType()).ToArray());
             })
-            .AddControllersAsServices()
-            .SetCompatibilityVersion(CompatibilityVersion.Version_2_2)
+            .AddNewtonsoftJson(options =>
+            {
+                options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+                options.SerializerSettings.ContractResolver = new WTMContractResolver()
+                {
+                };
+            })
+            .SetCompatibilityVersion(CompatibilityVersion.Version_3_0)
             .ConfigureApiBehaviorOptions(options =>
             {
                 options.SuppressModelStateInvalidFilter = true;
@@ -239,32 +237,9 @@ namespace WalkingTec.Mvvm.Mvc
             })
             .AddViewLocalization(LanguageViewLocationExpanderFormat.Suffix);
 
-
-            services.Configure<RazorViewEngineOptions>(options =>
-            {
-                if (mvc != null)
-                {
-                    options.FileProviders.Add(
-                    new EmbeddedFileProvider(
-                        mvc,
-                        "WalkingTec.Mvvm.Mvc" // your external assembly's base namespace
-                    )
-                );
-                }
-                if (admin != null)
-                {
-                    options.FileProviders.Add(
-                        new EmbeddedFileProvider(
-                            admin,
-                            "WalkingTec.Mvvm.Mvc.Admin" // your external assembly's base namespace
-                        )
-                    );
-                }
-            });
-
             services.Configure<FormOptions>(y =>
             {
-                y.ValueLengthLimit = int.MaxValue;
+                y.ValueLengthLimit = int.MaxValue - 20480;
                 y.MultipartBodyLengthLimit = con.FileUploadOptions.UploadLimit;
             });
 
@@ -324,24 +299,42 @@ namespace WalkingTec.Mvvm.Mvc
                             ValidateIssuerSigningKey = true,
                             IssuerSigningKey = jwtOptions.SymmetricSecurityKey,
 
-                            ValidateLifetime = true
+                            ValidateLifetime = true,
+                            ClockSkew = TimeSpan.FromSeconds(1)
                         };
                     });
             #endregion
 
             services.AddHttpClient();
-            if(con.Domains != null)
+            if (con.Domains != null)
             {
                 foreach (var item in con.Domains)
                 {
-                    services.AddHttpClient(item.Key, x => {
+                    services.AddHttpClient(item.Key, x =>
+                    {
                         x.BaseAddress = new Uri(item.Value.Url);
                         x.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
                         x.DefaultRequestHeaders.Add("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727)");
+                    }).ConfigurePrimaryHttpMessageHandler(() =>
+                    {
+                        return new HttpClientHandler() { AutomaticDecompression = DecompressionMethods.GZip, UseProxy = false, UseCookies = false };
                     });
                 }
             }
 
+            List<CultureInfo> supportedCultures = new List<CultureInfo>();
+            var lans = con.Languages.Split(",");
+            foreach (var lan in lans)
+            {
+                supportedCultures.Add(new CultureInfo(lan));
+            }
+
+            services.Configure<RequestLocalizationOptions>(options =>
+            {
+                options.DefaultRequestCulture = new RequestCulture(supportedCultures[0]);
+                options.SupportedCultures = supportedCultures;
+                options.SupportedUICultures = supportedCultures;
+            });
             GlobalServices.SetServiceProvider(services.BuildServiceProvider());
             return services;
         }
@@ -362,19 +355,7 @@ namespace WalkingTec.Mvvm.Mvc
             }
             if (string.IsNullOrEmpty(configs.Languages) == false)
             {
-                List<CultureInfo> supportedCultures = new List<CultureInfo>();
-                var lans = configs.Languages.Split(",");
-                foreach (var lan in lans)
-                {
-                    supportedCultures.Add(new CultureInfo(lan));
-                }
-
-                app.UseRequestLocalization(new RequestLocalizationOptions
-                {
-                    DefaultRequestCulture = new RequestCulture(supportedCultures[0]),
-                    SupportedCultures = supportedCultures,
-                    SupportedUICultures = supportedCultures
-                });
+                app.UseRequestLocalization();
             }
 
             app.UseExceptionHandler(configs.ErrorHandler);
@@ -387,15 +368,30 @@ namespace WalkingTec.Mvvm.Mvc
                     typeof(_CodeGenController).GetTypeInfo().Assembly,
                     "WalkingTec.Mvvm.Mvc")
             });
-            app.UseAuthentication();
 
+            app.UseRouting();
+            app.UseAuthentication();
+            app.UseAuthorization();
             app.UseResponseCaching();
+
+            if (configs.CorsOptions.EnableAll == true)
+            {
+                if (configs.CorsOptions?.Policy?.Count > 0)
+                {
+                    app.UseCors(configs.CorsOptions.Policy[0].Name);
+                }
+                else
+                {
+                    app.UseCors("_donotusedefault");
+                }
+            }
 
             bool InitDataBase = false;
             app.Use(async (context, next) =>
             {
                 if (InitDataBase == false)
                 {
+                    InitDataBase = true;
                     var lg = app.ApplicationServices.GetRequiredService<LinkGenerator>();
                     foreach (var m in gd.AllModule)
                     {
@@ -403,15 +399,22 @@ namespace WalkingTec.Mvvm.Mvc
                         //{
                         foreach (var a in m.Actions)
                         {
-                            var u = lg.GetPathByAction(a.MethodName, m.ClassName, new { area = m.Area?.AreaName });
-                            if (u == null)
+                            string u = null;
+                            if (a.ParasToRunTest != null && a.ParasToRunTest.Any(x => x.ToLower() == "id"))
                             {
-                                u = lg.GetPathByAction(a.MethodName, m.ClassName, new { id = 0, area = m.Area?.AreaName });
+                                u = lg.GetPathByAction(context, a.MethodName, m.ClassName, new { id = 0, area = m.Area?.AreaName });
+                            }
+                            else
+                            {
+                                u = lg.GetPathByAction(context, a.MethodName, m.ClassName, new { area = m.Area?.AreaName });
                             }
                             if (u != null && u.EndsWith("/0"))
                             {
                                 u = u.Substring(0, u.Length - 2);
-                                u = u + "/{id}";
+                                if (m.IsApi == true)
+                                {
+                                    u = u + "/{id}";
+                                }
                             }
                             a.Url = u;
                         }
@@ -426,19 +429,26 @@ namespace WalkingTec.Mvvm.Mvc
                         dc.DataInit(gd.AllModule, test != null).Wait();
                     }
                     GlobalServices.SetServiceProvider(app.ApplicationServices);
-                    InitDataBase = true;
                 }
-
                 if (context.Request.Path == "/")
                 {
                     context.Response.Cookies.Append("pagemode", configs.PageMode.ToString());
                     context.Response.Cookies.Append("tabmode", configs.TabMode.ToString());
                 }
-                try
+                context.Request.EnableBuffering();
+                context.Request.Body.Position = 0;
+                StreamReader tr = new StreamReader(context.Request.Body);
+                string body = tr.ReadToEndAsync().Result;
+                context.Request.Body.Position = 0;
+                if (context.Items.ContainsKey("DONOTUSE_REQUESTBODY") == false)
                 {
-                    await next.Invoke();
+                    context.Items.Add("DONOTUSE_REQUESTBODY", body);
                 }
-                catch (ConnectionResetException) { }
+                else
+                {
+                    context.Items["DONOTUSE_REQUESTBODY"] = body;
+                }
+                await next.Invoke();
                 if (context.Response.StatusCode == 404)
                 {
                     await context.Response.WriteAsync(string.Empty);
@@ -458,22 +468,15 @@ namespace WalkingTec.Mvvm.Mvc
                 }
             }
 
-            if (customRoutes != null)
+            app.UseEndpoints(endpoints =>
             {
-                app.UseMvc(customRoutes);
-            }
-            else
-            {
-                app.UseMvc(routes =>
-                {
-                    routes.MapRoute(
-                        name: "areaRoute",
-                        template: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
-                    routes.MapRoute(
-                        name: "default",
-                        template: "{controller=Home}/{action=Index}/{id?}");
-                });
-            }
+                endpoints.MapControllerRoute(
+                   name: "areaRoute",
+                   pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute(
+                    name: "default",
+                    pattern: "{controller=Home}/{action=Index}/{id?}");
+            });
 
             return app;
         }
@@ -484,6 +487,7 @@ namespace WalkingTec.Mvvm.Mvc
 
             //获取所有程序集
             gd.AllAssembly = Utils.GetAllAssembly();
+            gd.AllAssembly.AddRange(_dynamicAssembly);
             var admin = GetRuntimeAssembly("WalkingTec.Mvvm.Mvc.Admin");
             if (admin != null && gd.AllAssembly.Contains(admin) == false)
             {
@@ -560,9 +564,9 @@ namespace WalkingTec.Mvvm.Mvc
                         {
                             ID = Guid.NewGuid(),
                             ParentId = modelmenu.ID,
-                            PageName = page.Module.ModuleName,
+                            PageName = page.Module.ActionDes == null ? page.Module.ModuleName : page.Module.ActionDes.Description,
                             Url = url
-                        });
+                        }) ;
                     }
                 }
             }
@@ -719,6 +723,8 @@ namespace WalkingTec.Mvvm.Mvc
                     var ada = attrs[0] as ActionDescriptionAttribute;
                     var nameKey = ada.GetDescription(ctrl);
                     model.ModuleName = nameKey;
+                    ada.SetLoccalizer(ctrl);
+                    model.ActionDes = ada;
                 }
                 else
                 {
@@ -761,8 +767,8 @@ namespace WalkingTec.Mvvm.Mvc
                         if (attrs2.Length > 0)
                         {
                             var ada = attrs2[0] as ActionDescriptionAttribute;
-                            var nameKey = ada.GetDescription(ctrl);
-                            action.ActionName = nameKey;
+                            ada.SetLoccalizer(ctrl);
+                            action.ActionDes = ada;
                         }
                         else
                         {
@@ -812,12 +818,21 @@ namespace WalkingTec.Mvvm.Mvc
                         if (attrs2.Length > 0)
                         {
                             var ada = attrs2[0] as ActionDescriptionAttribute;
-                            string nameKey = ada.GetDescription(ctrl);
-                            action.ActionName = nameKey;
+                            ada.SetLoccalizer(ctrl);
+                            action.ActionDes = ada;
                         }
                         else
                         {
                             action.ActionName = action.MethodName;
+                        }
+                        var pars = method.GetParameters();
+                        if (pars != null && pars.Length > 0)
+                        {
+                            action.ParasToRunTest = new List<string>();
+                            foreach (var par in pars)
+                            {
+                                action.ParasToRunTest.Add(par.Name);
+                            }
                         }
                         model.Actions.Add(action);
                     }

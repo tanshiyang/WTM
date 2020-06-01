@@ -55,7 +55,7 @@ namespace WalkingTec.Mvvm.Demo.ViewModels.MajorVMs
                     Remark = x.Remark,
                     SchoolName_view = x.School.SchoolName,
                 })
-                .OrderBy(x => x.ID);
+                .OrderBy(x => x.MajorCode);
             return query;
         }
 

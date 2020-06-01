@@ -6,14 +6,13 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-
 using WalkingTec.Mvvm.Core;
 using WalkingTec.Mvvm.Core.Extensions;
 using WalkingTec.Mvvm.Mvc.Model;
@@ -122,7 +121,7 @@ namespace WalkingTec.Mvvm.Mvc
             //var vmType = Type.GetType(_DONOT_USE_VMNAME);
             //var vmCreater = vmType.GetConstructor(Type.EmptyTypes);
             //var listVM = vmCreater.Invoke(null) as BaseVM;
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default" : _DONOT_USE_CS;
             var listVM = CreateVM(_DONOT_USE_VMNAME, null, null, true) as IBasePagedListVM<TopBasePoco, BaseSearcher>;
             listVM.FC = qs;
             if (listVM is IBasePagedListVM<TopBasePoco, ISearcher>)
@@ -188,7 +187,7 @@ namespace WalkingTec.Mvvm.Mvc
             }
             var instanceType = Type.GetType(_DONOT_USE_VMNAME);
 
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default" : _DONOT_USE_CS;
             var listVM = CreateVM(_DONOT_USE_VMNAME) as IBasePagedListVM<TopBasePoco, ISearcher>;
 
             listVM.FC = qs;
@@ -237,10 +236,10 @@ namespace WalkingTec.Mvvm.Mvc
         public IActionResult Error()
         {
             var ex = HttpContext.Features.Get<IExceptionHandlerPathFeature>();
-                ActionLog log = new ActionLog();
-                log.LogType = ActionLogTypesEnum.Exception;
-                log.ActionTime = DateTime.Now;
-                log.ITCode = LoginUserInfo?.ITCode ?? string.Empty;
+            ActionLog log = new ActionLog();
+            log.LogType = ActionLogTypesEnum.Exception;
+            log.ActionTime = DateTime.Now;
+            log.ITCode = LoginUserInfo?.ITCode ?? string.Empty;
 
                 var controllerDes = ex.Error.TargetSite.DeclaringType.GetCustomAttributes(typeof(ActionDescriptionAttribute), false).Cast<ActionDescriptionAttribute>().FirstOrDefault();
                 var actionDes = ex.Error.TargetSite.GetCustomAttributes(typeof(ActionDescriptionAttribute), false).Cast<ActionDescriptionAttribute>().FirstOrDefault();
@@ -255,9 +254,9 @@ namespace WalkingTec.Mvvm.Mvc
                 log.ActionUrl = ex.Path;
                 log.IP = HttpContext.Connection.RemoteIpAddress.ToString();
                 log.Remark = ex.Error.ToString();
-                if (string.IsNullOrEmpty(log.Remark) == false && log.Remark.Length > 1000)
+                if (string.IsNullOrEmpty(log.Remark) == false && log.Remark.Length > 2000)
                 {
-                    log.Remark = log.Remark.Substring(0, 1000);
+                    log.Remark = log.Remark.Substring(0, 2000);
                 }
                 DateTime? starttime = HttpContext.Items["actionstarttime"] as DateTime?;
                 if (starttime != null)
@@ -284,7 +283,7 @@ namespace WalkingTec.Mvvm.Mvc
         [ActionDescription("UploadFileRoute")]
         public IActionResult Upload(SaveFileModeEnum? sm = null, string groupName = null, bool IsTemprory = true, string _DONOT_USE_CS = "default")
         {
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default" : _DONOT_USE_CS;
             var FileData = Request.Form.Files[0];
             sm = sm == null ? ConfigInfo.FileUploadOptions.SaveFileMode : sm;
             var vm = CreateVM<FileAttachmentVM>();
@@ -310,7 +309,7 @@ namespace WalkingTec.Mvvm.Mvc
             {
                 return Upload(sm, groupName, IsTemprory, _DONOT_USE_CS);
             }
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default" : _DONOT_USE_CS;
             var FileData = Request.Form.Files[0];
             sm = sm == null ? ConfigInfo.FileUploadOptions.SaveFileMode : sm;
             var vm = CreateVM<FileAttachmentVM>();
@@ -351,7 +350,7 @@ namespace WalkingTec.Mvvm.Mvc
         [ActionDescription("UploadForLayUIRichTextBox")]
         public IActionResult UploadForLayUIRichTextBox(string _DONOT_USE_CS = "default")
         {
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default" : _DONOT_USE_CS;
             var FileData = Request.Form.Files[0];
             var sm = ConfigInfo.FileUploadOptions.SaveFileMode;
             var vm = CreateVM<FileAttachmentVM>();
@@ -373,7 +372,7 @@ namespace WalkingTec.Mvvm.Mvc
         [ActionDescription("GetFileName")]
         public IActionResult GetFileName(Guid id, string _DONOT_USE_CS = "default")
         {
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default" : _DONOT_USE_CS;
             FileAttachmentVM vm = CreateVM<FileAttachmentVM>(id);
             return Ok(vm.Entity.FileName);
         }
@@ -381,7 +380,7 @@ namespace WalkingTec.Mvvm.Mvc
         [ActionDescription("GetFile")]
         public IActionResult GetFile(Guid id, bool stream = false, string _DONOT_USE_CS = "default", int? width = null, int? height = null)
         {
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default" : _DONOT_USE_CS;
             if (id == Guid.Empty)
             {
                 return new StatusCodeResult(StatusCodes.Status404NotFound);
@@ -434,15 +433,15 @@ namespace WalkingTec.Mvvm.Mvc
             }
             else
             {
-                Response.Body.Write(data, 0, data.Count());
+                Response.Body.WriteAsync(data, 0, data.Count());
                 return new EmptyResult();
             }
         }
 
         [ActionDescription("ViewFile")]
-        public IActionResult ViewFile(Guid id, string width, string _DONOT_USE_CS = "default")
+        public IActionResult ViewFile(Guid id, string _DONOT_USE_CS = "default")
         {
-            CurrentCS = _DONOT_USE_CS ?? "default";
+            CurrentCS = (string.IsNullOrEmpty(_DONOT_USE_CS) == true) ? "default":_DONOT_USE_CS;
             string html = string.Empty;
             FileAttachmentVM vm = CreateVM<FileAttachmentVM>(id);
             if (vm.Entity.FileExt.ToLower() == "pdf")
@@ -461,7 +460,7 @@ namespace WalkingTec.Mvvm.Mvc
             }
             else
             {
-                html = $@"<img id='FileObject' style='{(string.IsNullOrEmpty(width)?"":$"width:{width}px")}'  border=0 src='/_Framework/GetFile?id={id}&stream=true&_DONOT_USE_CS={_DONOT_USE_CS}'/>";
+                html = $@"<img id='FileObject'  border=0 src='/_Framework/GetFile?id={id}&stream=true&_DONOT_USE_CS={_DONOT_USE_CS}'/>";
             }
             return Content(html);
 
@@ -556,15 +555,36 @@ namespace WalkingTec.Mvvm.Mvc
             //循环所有菜单项
             foreach (var menu in menus)
             {
-                    RemoveEmptyMenu(menu.Children);
-                    if ((menu.Children == null || menu.Children.Count == 0) && (menu.Url == null))
-                    {
-                        toRemove.Add(menu);
-                    }
+                RemoveEmptyMenu(menu.Children);
+                if ((menu.Children == null || menu.Children.Count == 0) && (menu.Url == null))
+                {
+                    toRemove.Add(menu);
+                }
             }
             foreach (var remove in toRemove)
             {
                 menus.Remove(remove);
+            }
+        }
+
+        private void LocalizeMenu(List<Menu> menus)
+        {
+            if (menus == null)
+            {
+                return;
+            }
+            //循环所有菜单项
+            foreach (var menu in menus)
+            {
+                LocalizeMenu(menu.Children);
+                if (Localizer[menu.Title].ResourceNotFound == true)
+                {
+                    menu.Title = Core.Program._localizer[menu.Title];
+                }
+                else
+                {
+                    menu.Title = Localizer[menu.Title];
+                }
             }
         }
 
@@ -629,6 +649,7 @@ namespace WalkingTec.Mvvm.Mvc
                 var resultMenus = new List<Menu>();
                 GenerateMenuTree(FFMenus, resultMenus, true);
                 RemoveEmptyMenu(resultMenus);
+                LocalizeMenu(resultMenus);
                 return Content(JsonConvert.SerializeObject(new { Code = 200, Msg = string.Empty, Data = resultMenus }, new JsonSerializerSettings()
                 {
                     NullValueHandling = NullValueHandling.Ignore
@@ -640,6 +661,7 @@ namespace WalkingTec.Mvvm.Mvc
                 GenerateMenuTree(FFMenus.Where(x => x.ShowOnMenu == true).ToList(), resultMenus);
                 RemoveUnAccessableMenu(resultMenus, LoginUserInfo);
                 RemoveEmptyMenu(resultMenus);
+                LocalizeMenu(resultMenus);
                 return Content(JsonConvert.SerializeObject(new { Code = 200, Msg = string.Empty, Data = resultMenus }, new JsonSerializerSettings()
                 {
                     NullValueHandling = NullValueHandling.Ignore
@@ -668,8 +690,8 @@ namespace WalkingTec.Mvvm.Mvc
         {
             return ReadFromCache<string>("githubstar", () =>
             {
-                var s = APIHelper.CallAPI<github>("https://api.github.com/repos/dotnetcore/wtm").Result;
-                return s.stargazers_count.ToString();
+                var s = ConfigInfo.Domains["github"].CallAPI<github>("/repos/dotnetcore/wtm").Result;
+                return s==null? "" :s.stargazers_count.ToString();
             }, 1800);
         }
 
@@ -679,7 +701,7 @@ namespace WalkingTec.Mvvm.Mvc
         {
             var rv = ReadFromCache<string>("githubinfo", () =>
             {               
-                var s = APIHelper.CallAPI<github>("https://api.github.com/repos/dotnetcore/wtm").Result;
+                var s = ConfigInfo.Domains["github"].CallAPI<github>("/repos/dotnetcore/wtm").Result;
                 return JsonConvert.SerializeObject(s);
             }, 1800);
             return Content(rv, "application/json");
@@ -820,6 +842,17 @@ namespace WalkingTec.Mvvm.Mvc
                 throw new Exception($"Unregistered service: {nameof(ConfigInfo.UEditorOptions)}");
             return Json(ConfigInfo.UEditorOptions);
         }
-    }
 
+        [Public]
+        public IActionResult SetLanguage(string culture)
+        {
+            Response.Cookies.Append(
+                CookieRequestCultureProvider.DefaultCookieName,
+                CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture)),
+                new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }
+            );
+
+            return FFResult().AddCustomScript("location.reload();");
+        }
+    }
 }
